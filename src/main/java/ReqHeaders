@@ -1,0 +1,7 @@
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8
+Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7
+Connection: keep-alive
+Cookie: maps_los=1; mda=0; yandex_gid=44; yandexuid=2772691131542525022; _ym_uid=1542525024636448310; my=YwA=; yc=1544113592.zen.cach%3A1543605014; _ym_d=1544207438; device_id="b9260fbf06eea7c6819f272a276ebaa665e3a4a0b"; i=C2eySnPXcA0QBqWdUA1WuqZYWTlFgnzpyOulM4me8gDwBxLef+o/kjzPdx0V9unLwXS/UWB4EJkr+6vI5bA+9XhiIoY=; _ym_isad=1; yabs-frequency=/4/00010000002_d0fS/xrImS0Gp8OnLi704Cu1-LR1m13CW_5ImS0KpG07BLB1m13DWmjBYRWGpGFjKi705Cm02/; _ym_wasSynced=%7B%22time%22%3A1544467822596%2C%22params%22%3A%7B%22eu%22%3A0%7D%2C%22bkParams%22%3A%7B%7D%7D; ys=wprid.1544469089708371-325506457875369169446044-vla1-3247; yp=1545117023.ygu.1#1547061093.shlos.1#1547061093.los.1#1547061093.losc.0#1574712829.dsws.4#1574712829.dswa.0#1574712829.dwsets.4#1560236160.szm.1:1366x768:1366x636#1544554841.ln_tp.01
+Host: yandex.ru
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36
