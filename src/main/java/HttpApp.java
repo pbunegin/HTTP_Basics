@@ -1,9 +1,19 @@
 import org.apache.commons.httpclient.*;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -12,9 +22,10 @@ import java.util.regex.Pattern;
 
 public class HttpApp {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
-    private static final String CSRF_TOKEN = "\"csrfToken\":\"[^\"]++\"";
-    private static final String YANDEX_UID = "yandexuid=[^\"]++";
+    private static final String CSRF_TOKEN_REGEX = "\"csrfToken\":\"[^\"]++\"";
+    private static final String YANDEX_UID_REGEX = "yandexuid=[^\"]++";
     private static final String FILE_REQ_HEADERS = "src\\main\\java\\ReqHeaders";
+    private static final String REQUEST_ADDRESS = "ижевск, коммунаров, 193";
     private HttpClient httpClient;
     private GetMethod method;
     private String url;
@@ -26,44 +37,68 @@ public class HttpApp {
     }
 
     public void start() {
-//        method.getParams().setParameter((HttpMethodParams.RETRY_HANDLER),
-//                new DefaultHttpMethodRetryHandler(3, false));
+        String bodyRequest = executeRequest(null, null);
+        String csrfToken = getCsrfToken(bodyRequest);
+        String yandexuid = getYandexUid();
+        logger.info("csrfToken = {}, {}", csrfToken, yandexuid);
+        String newBodyRequest = executeRequest(csrfToken, yandexuid);
+        String coordinates = getCoordinates(newBodyRequest);
+        logger.info("Координаты: {}", coordinates);
+    }
+
+    private String getCoordinates(String newBodyRequest) {
+        Document html = Jsoup.parse(newBodyRequest);
+        String mapLocation = html.getElementsByClass("config-view").get(0).data();
+        JSONObject jsonObject = null;
         try {
-            addRequestHeader();
+            jsonObject = (JSONObject) new JSONParser().parse(mapLocation);
+        } catch (ParseException e) {
+            logger.error(e.getMessage());
+        }
+        JSONObject searchPreloadedResults = (JSONObject) (jsonObject != null ? jsonObject.get("searchPreloadedResults") : null);
+        JSONArray items = (JSONArray) (searchPreloadedResults != null ? searchPreloadedResults.get("items") : null);
+        JSONObject object = (JSONObject) (items != null ? items.toArray()[0] : null);
+        JSONArray coordinates = (JSONArray) (object != null ? object.get("coordinates") : null);
+        return coordinates != null ? coordinates.toString() : null;
+    }
+
+    private String executeRequest(String csrfToken, String yandexuid) {
+        method = new GetMethod(url);
+        StringBuilder result = new StringBuilder();
+        addRequestHeader();
+        if (csrfToken != null && !csrfToken.isEmpty() && yandexuid != null && !yandexuid.isEmpty()) {
+            try {
+                method.setQueryString("?text=" + URLEncoder.encode(REQUEST_ADDRESS, "UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+                logger.error(e.getMessage());
+            }
+            method.setRequestHeader("Cookie", yandexuid);
+        }
+        try {
             if (httpClient.executeMethod(method) != HttpStatus.SC_OK) {
                 logger.info("Method failed: {}", method.getStatusLine());
             }
-            String csrfToken = getCsrfToken();
-            String yandexuid = getYandexUid();
-            logger.info("{}  ::  {}", csrfToken, yandexuid);
-
-            String newBody = executeRequest(csrfToken, yandexuid);
-            logger.info(newBody);
-        } catch (HttpException e) {
-            logger.error("Fatal protocol violation: " + e.getMessage());
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream()))) {
+                String str;
+                while ((str = reader.readLine()) != null) {
+                    result.append(str);
+                }
+            }
         } catch (IOException e) {
-            logger.error("Fatal transport error: " + e.getMessage());
+            logger.error(e.getMessage());
         } finally {
-            // Release the connection.
             method.releaseConnection();
         }
-
+        return result.toString();
     }
 
-    private String executeRequest(String csrfToken, String yandexuid) throws IOException {
-        method = new GetMethod(url);
-        method.setQueryString("?text=%D0%B8%D0%B6%D0%B5%D0%B2%D1%81%D0%BA%2C%20%D0%BA%D0%BE%D0%BC%D0%BC%D1%83%D0%BD%D0%B0%D1%80%D0%BE%D0%B2%2C%20193&csrfToken="+csrfToken);
-//        addRequestHeader();
-        method.setRequestHeader("Cookie",yandexuid);
-        if (httpClient.executeMethod(method) != HttpStatus.SC_OK) {
-            logger.info("Method failed: {}", method.getStatusLine());
-        }
-        return method.getResponseBodyAsString();
-    }
-
-    private void addRequestHeader() throws IOException {
+    private void addRequestHeader() {
         List<String> strHeaders = null;
-        strHeaders = Files.readAllLines(Paths.get(FILE_REQ_HEADERS));
+        try {
+            strHeaders = Files.readAllLines(Paths.get(FILE_REQ_HEADERS));
+        } catch (IOException e) {
+            logger.error(e.getMessage());
+        }
         if (strHeaders != null) {
             for (String string : strHeaders) {
                 method.addRequestHeader(string.split(": ")[0], string.split(": ")[1]);
@@ -73,17 +108,15 @@ public class HttpApp {
 
     private String getYandexUid() {
         Header header = method.getResponseHeader("Content-Security-Policy");
-        return parseStr(header.getValue(),YANDEX_UID);
+        return parseStr(header.getValue(), YANDEX_UID_REGEX);
     }
 
-
-    private String getCsrfToken() throws IOException {
-        String result = method.getResponseBodyAsString();
-        result = parseStr(result,CSRF_TOKEN);
-        if (result != null){
-            result = result.replaceAll("\\\"","").split(":")[1];
+    private String getCsrfToken(String bodyRequest) {
+        bodyRequest = parseStr(bodyRequest, CSRF_TOKEN_REGEX);
+        if (bodyRequest != null) {
+            bodyRequest = bodyRequest.replaceAll("\\\"", "").split(":")[1];
         }
-        return result;
+        return bodyRequest;
     }
 
     private String parseStr(String str, String pattern) {
