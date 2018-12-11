@@ -1,5 +1,7 @@
 import org.apache.commons.httpclient.*;
+import org.apache.commons.httpclient.cookie.CookiePolicy;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.params.HttpMethodParams;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -25,18 +27,20 @@ public class HttpApp {
     private static final String CSRF_TOKEN_REGEX = "\"csrfToken\":\"[^\"]++\"";
     private static final String YANDEX_UID_REGEX = "yandexuid=[^\"]++";
     private static final String FILE_REQ_HEADERS = "src\\main\\java\\ReqHeaders";
-    private static final String REQUEST_ADDRESS = "ижевск, коммунаров, 193";
+    private String url;
+    private String requestAddress;
     private HttpClient httpClient;
     private GetMethod method;
-    private String url;
 
-    public HttpApp(String url) {
-        this.method = new GetMethod(url);
+    public HttpApp(String url, String requestAddress) {
         this.url = url;
+        this.requestAddress = requestAddress;
         this.httpClient = new HttpClient();
+        this.method = new GetMethod(url);
     }
 
     public void start() {
+        httpClient.getParams().setParameter(HttpMethodParams.COOKIE_POLICY, CookiePolicy.BROWSER_COMPATIBILITY);
         String bodyRequest = executeRequest(null, null);
         String csrfToken = getCsrfToken(bodyRequest);
         String yandexuid = getYandexUid();
@@ -57,37 +61,46 @@ public class HttpApp {
         }
         JSONObject searchPreloadedResults = (JSONObject) (jsonObject != null ? jsonObject.get("searchPreloadedResults") : null);
         JSONArray items = (JSONArray) (searchPreloadedResults != null ? searchPreloadedResults.get("items") : null);
-        JSONObject object = (JSONObject) (items != null ? items.toArray()[0] : null);
-        JSONArray coordinates = (JSONArray) (object != null ? object.get("coordinates") : null);
+        JSONObject item = (JSONObject) (items != null ? items.toArray()[0] : null);
+        JSONArray coordinates = (JSONArray) (item != null ? item.get("coordinates") : null);
         return coordinates != null ? coordinates.toString() : null;
     }
 
     private String executeRequest(String csrfToken, String yandexuid) {
         method = new GetMethod(url);
-        StringBuilder result = new StringBuilder();
-        addRequestHeader();
+        String result = null;
         if (csrfToken != null && !csrfToken.isEmpty() && yandexuid != null && !yandexuid.isEmpty()) {
             try {
-                method.setQueryString("?text=" + URLEncoder.encode(REQUEST_ADDRESS, "UTF-8"));
+                method.setQueryString("?text=" + URLEncoder.encode(requestAddress, "UTF-8"));
             } catch (UnsupportedEncodingException e) {
                 logger.error(e.getMessage());
             }
             method.setRequestHeader("Cookie", yandexuid);
+        } else {
+            addRequestHeader();
         }
         try {
             if (httpClient.executeMethod(method) != HttpStatus.SC_OK) {
                 logger.info("Method failed: {}", method.getStatusLine());
             }
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream()))) {
-                String str;
-                while ((str = reader.readLine()) != null) {
-                    result.append(str);
-                }
-            }
+            result = getResponseBody();
         } catch (IOException e) {
             logger.error(e.getMessage());
         } finally {
             method.releaseConnection();
+        }
+        return result;
+    }
+
+    private String getResponseBody() {
+        StringBuilder result = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream()))) {
+            String str;
+            while ((str = reader.readLine()) != null) {
+                result.append(str);
+            }
+        } catch (IOException e) {
+            logger.error(e.getMessage());
         }
         return result.toString();
     }
