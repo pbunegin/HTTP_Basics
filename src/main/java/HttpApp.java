@@ -8,6 +8,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,11 @@ public class HttpApp {
 
     private String getCoordinates(String newBodyRequest) {
         Document html = Jsoup.parse(newBodyRequest);
-        String mapLocation = html.getElementsByClass("config-view").get(0).data();
+        Elements elementsConfigVew = html.getElementsByClass("config-view");
+        if (elementsConfigVew.size() == 0){
+            return null;
+        }
+        String mapLocation = elementsConfigVew.get(0).data();
         JSONObject jsonObject = null;
         try {
             jsonObject = (JSONObject) new JSONParser().parse(mapLocation);
@@ -94,7 +99,7 @@ public class HttpApp {
 
     private String getResponseBody() {
         StringBuilder result = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream(),"UTF-8"))) {
             String str;
             while ((str = reader.readLine()) != null) {
                 result.append(str);
@@ -121,7 +126,7 @@ public class HttpApp {
 
     private String getYandexUid() {
         Header header = method.getResponseHeader("Content-Security-Policy");
-        return parseStr(header.getValue(), YANDEX_UID_REGEX);
+        return header != null ? parseStr(header.getValue(), YANDEX_UID_REGEX) : null;
     }
 
     private String getCsrfToken(String bodyRequest) {
